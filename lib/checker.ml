@@ -50,33 +50,38 @@ let extract kind line =
     | None -> Error "version could not be safely parsed"
 
 let check requirement =
+  let ( let* ) = Result.bind in
   let report ?version result = { requirement; result; version } in
-  match requirement.Requirement.kind with
-  | Requirement.Unsupported -> report (Unknown "unsupported requirement")
-  | kind ->
-      let command = match kind with
-        | Requirement.Command name -> name
-        | Requirement.Bash -> "bash"
-        | _ -> "grep"
+  let unknown result = Result.map_error (fun message -> Unknown message) result in
+  let evaluate () =
+    let* command, needs_version =
+      match requirement.Requirement.kind with
+      | Requirement.Command name -> Ok (name, false)
+      | Requirement.Bash -> Ok ("bash", requirement.minimum <> None)
+      | Requirement.Gnu_grep -> Ok ("grep", true)
+      | Requirement.Unsupported -> Error (Unknown "unsupported requirement")
+    in
+    let* path =
+      Resolver.resolve command
+      |> Option.to_result ~none:(Unsatisfied "command not found")
+    in
+    if not needs_version then Ok (report Satisfied)
+    else
+      let* line = probe path |> unknown in
+      let* text, version = extract requirement.kind line |> unknown in
+      let result =
+        match requirement.minimum with
+        | Some minimum when Version.compare version minimum < 0 ->
+            Unsatisfied "version is too old"
+        | _ -> Satisfied
       in
-      match Resolver.resolve command with
-      | None -> report (Unsatisfied "command not found")
-      | Some path ->
-          if (match kind with Requirement.Command _ -> true | Requirement.Bash -> requirement.minimum = None | _ -> false)
-          then report Satisfied
-          else
-            try
-              match probe path with
-              | Error message -> report (Unknown message)
-              | Ok line ->
-                  (match extract kind line with
-                   | Error message -> report (Unknown message)
-                   | Ok (text, version) ->
-                       match requirement.minimum with
-                       | Some minimum when Version.compare version minimum < 0 ->
-                           report ~version:text (Unsatisfied "version is too old")
-                       | _ -> report ~version:text Satisfied)
-            with Unix.Unix_error (error, _, _) -> report (Unknown (Unix.error_message error))
+      Ok (report ~version:text result)
+  in
+  try
+    match evaluate () with
+    | Ok report -> report
+    | Error result -> report result
+  with Unix.Unix_error (error, _, _) -> report (Unknown (Unix.error_message error))
 
 let format report =
   let r = report.requirement in
