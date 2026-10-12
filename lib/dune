@@ -1,2 +1,3 @@
 (library
- (name shreq))
+ (name shreq)
+ (libraries unix))

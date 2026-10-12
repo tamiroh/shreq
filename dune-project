@@ -15,6 +15,5 @@
 
 (package
  (name shreq)
- (depends ocaml))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+ (synopsis "Check shell script environment requirements")
+ (depends (ocaml (>= 4.13))))

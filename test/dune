@@ -1,3 +1,5 @@
 (test
  (name test_shreq)
- (libraries shreq))
+ (libraries shreq unix)
+ (deps ../bin/main.exe)
+ (action (run %{test} %{dep:../bin/main.exe})))
