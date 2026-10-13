@@ -29,7 +29,11 @@ let extract kind line =
   if not (String.starts_with ~prefix line) then Error "implementation could not be identified"
   else
     let tail = String.sub line (String.length prefix) (String.length line - String.length prefix) in
-    let token = match Requirement.words tail with word :: _ -> word | [] -> "" in
+    let token =
+      String.split_on_char ' ' (String.map (function '\t' -> ' ' | c -> c) tail)
+      |> List.find_opt (fun word -> word <> "")
+      |> Option.value ~default:""
+    in
     let numeric =
       match kind, String.index_opt token '(' with
       | Requirement.Bash, Some index ->
@@ -38,7 +42,7 @@ let extract kind line =
             match String.index_opt suffix ')' with
             | Some close ->
                 let build = String.sub suffix 1 (close - 1) in
-                build <> "" && String.for_all Version.digit build
+                build <> "" && String.for_all (fun c -> c >= '0' && c <= '9') build
                 && String.sub suffix (close + 1) (String.length suffix - close - 1) = "-release"
             | None -> false
           in
